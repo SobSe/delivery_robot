@@ -1,3 +1,4 @@
+import java.nio.channels.ScatteringByteChannel;
 import java.util.*;
 
 public class Main {
@@ -5,6 +6,28 @@ public class Main {
 
     public static void main(String[] args) {
         List<Thread> threads = new ArrayList<>();
+
+        Thread freqLog = new Thread(() -> {
+            synchronized (sizeToFreq) {
+                while (!Thread.interrupted()) {
+                    try {
+                        sizeToFreq.wait();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    Map.Entry<Integer, Integer> maxFreq = sizeToFreq
+                            .entrySet()
+                            .stream()
+                            .max(Comparator.comparingInt(Map.Entry::getValue))
+                            .get();
+                    System.out.printf("Текущее самое частое количество повторений %d (встретилось %d раз)\n",
+                            maxFreq.getKey(),
+                            maxFreq.getValue());
+                }
+            }
+        });
+        freqLog.start();
+
         for (int i = 0; i < 1000; i++) {
             Thread thread = new Thread(() -> {
                 String route = Main.generateRoute("RLRFR", 100);
@@ -12,8 +35,9 @@ public class Main {
                 freqR = route.chars()
                         .filter((c) -> (c == 'R'))
                         .count();
-                synchronized(Main.sizeToFreq) {
+                synchronized(sizeToFreq) {
                     sizeToFreq.compute((int) freqR, (key, val) -> ((val == null) ? 1 : val + 1));
+                    sizeToFreq.notify();
                 }
             });
             thread.start();
@@ -26,6 +50,7 @@ public class Main {
 
             }
         }
+        freqLog.interrupt();
         int keyMaxFreq = sizeToFreq
                 .entrySet()
                 .stream()
