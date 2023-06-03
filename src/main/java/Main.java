@@ -1,66 +1,56 @@
-import java.nio.channels.ScatteringByteChannel;
 import java.util.*;
 
 public class Main {
     public static final Map<Integer, Integer> sizeToFreq = new HashMap<>();
+    public static final String LETTERS = "RLRFR";
+    public static final int COUNT_THREADS = 1000;
+    final static int ROUTE_LENGTH = 100;
 
     public static void main(String[] args) {
         List<Thread> threads = new ArrayList<>();
 
         Thread freqLog = new Thread(() -> {
-            synchronized (sizeToFreq) {
-                while (!Thread.interrupted()) {
+            while (!Thread.interrupted()) {
+                synchronized (sizeToFreq) {
                     try {
                         sizeToFreq.wait();
                     } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                        return;
                     }
-                    Map.Entry<Integer, Integer> maxFreq = sizeToFreq
-                            .entrySet()
-                            .stream()
-                            .max(Comparator.comparingInt(Map.Entry::getValue))
-                            .get();
-                    System.out.printf("Текущее самое частое количество повторений %d (встретилось %d раз)\n",
-                            maxFreq.getKey(),
-                            maxFreq.getValue());
+                    printOfLeader();
                 }
             }
         });
         freqLog.start();
 
-        for (int i = 0; i < 1000; i++) {
-            Thread thread = new Thread(() -> {
-                String route = Main.generateRoute("RLRFR", 100);
-                long freqR = 0;
-                freqR = route.chars()
-                        .filter((c) -> (c == 'R'))
-                        .count();
-                synchronized(sizeToFreq) {
-                    sizeToFreq.compute((int) freqR, (key, val) -> ((val == null) ? 1 : val + 1));
-                    sizeToFreq.notify();
-                }
-            });
-            thread.start();
+        for (int i = 0; i < COUNT_THREADS; i++) {
+            Thread thread = getThread();
             threads.add(thread);
         }
         for (Thread thread : threads) {
             try {
+                thread.start();
                 thread.join();
             } catch (InterruptedException e) {
 
             }
         }
         freqLog.interrupt();
-        int keyMaxFreq = sizeToFreq
-                .entrySet()
-                .stream()
-                .max(Comparator.comparingInt(Map.Entry::getValue))
-                .get()
-                .getKey();
-        int maxFreq = sizeToFreq.get(keyMaxFreq);
-        System.out.printf("Самое частое количество повторений %d (встретилось %d раз)\n", keyMaxFreq, maxFreq);
-        System.out.println("Другие размеры:");
-        sizeToFreq.forEach((k, v) -> {if(k != keyMaxFreq) System.out.printf("- %d (%d раз)\n", k, v);});
+    }
+
+    private static Thread getThread() {
+        Thread thread = new Thread(() -> {
+            String route = generateRoute(LETTERS, ROUTE_LENGTH);
+            long freqR = 0;
+            freqR = route.chars()
+                    .filter((c) -> (c == 'R'))
+                    .count();
+            synchronized(sizeToFreq) {
+                sizeToFreq.compute((int) freqR, (key, val) -> ((val == null) ? 1 : val + 1));
+                sizeToFreq.notify();
+            }
+        });
+        return thread;
     }
 
     public static String generateRoute(String letters, int length) {
@@ -70,5 +60,16 @@ public class Main {
             route.append(letters.charAt(random.nextInt(letters.length())));
         }
         return route.toString();
+    }
+
+    public static void printOfLeader() {
+        Map.Entry<Integer, Integer> maxFreq = sizeToFreq
+                .entrySet()
+                .stream()
+                .max(Comparator.comparingInt(Map.Entry::getValue))
+                .get();
+        System.out.printf("Текущее самое частое количество повторений %d (встретилось %d раз)\n",
+                maxFreq.getKey(),
+                maxFreq.getValue());
     }
 }
